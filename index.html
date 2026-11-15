@@ -209,7 +209,7 @@ document.addEventListener("keydown",function(e){if(e.key==="Escape")close_()});
 
 // --- SISTEM CLOUD SYNC (GITHUB GIST) ---
 var VERCEL_BROKER_URL = "https://awn-broker.vercel.app/api/token";
-var GITHUB_CLIENT_ID = "Ov23li2pYnXCpfGqAItj"; // <--- GANTI DENGAN CLIENT ID ANDA
+var GITHUB_CLIENT_ID = "Ov23li2pYnXCpfGqAItj"; 
 var GIST_ID = localStorage.getItem('awn-gist-id') || null; 
 var accessToken = localStorage.getItem('awn-gh-token') || null;
 
@@ -262,7 +262,8 @@ function updateLoginUI() {
         loginBtn.textContent = "Login GitHub";
         loginBtn.style.background = "linear-gradient(120deg,#333,#555)";
         loginBtn.onclick = () => {
-            window.location.href = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&scope=gist`;
+            var redirectUri = window.location.origin + window.location.pathname;
+            window.location.href = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID.trim()}&scope=gist&redirect_uri=${encodeURIComponent(redirectUri)}`;
         };
     }
 }
