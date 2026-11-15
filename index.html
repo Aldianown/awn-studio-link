@@ -186,7 +186,7 @@ c.onmousemove=function(ev){var r=c.getBoundingClientRect(),x=(ev.clientX-r.left)
 c.style.setProperty("--ry",((x-.5)*14)+"deg");c.style.setProperty("--rx",((.5-y)*14)+"deg");c.style.setProperty("--mx",(x*100)+"%");c.style.setProperty("--my",(y*100)+"%")};
 c.onmouseleave=function(){c.style.setProperty("--rx","0deg");c.style.setProperty("--ry","0deg")};
 g.appendChild(c)})}
-function open_(l){edit=l||null;$("mt").textContent=l?"Ubah Segel Link":"Segel Link Baru";
+function open_(l){edit=l||null;$("mt").textContent=l?"Ubah Segel Link":"Segel Sihir Baru";
 $("f-t").value=l?l.t:"";$("f-u").value=l?l.u:"";$("f-c").value=l?(l.c||""):(cat!=="Semua"?cat:"");$("ov").classList.add("on");setTimeout(function(){$("f-t").focus()},50)}
 function close_(){$("ov").classList.remove("on")}
 $("add").onclick=$("fab").onclick=function(){open_(null)};$("cx").onclick=close_;
