@@ -128,6 +128,7 @@ main{padding:12px 14px 130px}
 <button class="btn" id="add">＋ Tambah Link</button>
 <button class="btn g" id="exp">Ekspor</button>
 <button class="btn g" id="imp">Impor</button>
+<button class="btn" id="btn-login" style="background:linear-gradient(120deg,#333,#555);display:none;">Login GitHub</button>
 <input id="file" type="file" accept="application/json" hidden>
 </div>
 <div class="chips" id="chips"></div>
@@ -205,6 +206,146 @@ r.onload=function(){try{var d=JSON.parse(r.result);if(!Array.isArray(d))throw 0;
 d.forEach(function(x){if(x&&x.u&&!links.some(function(l){return l.u===x.u}))links.push({id:Date.now()+Math.random(),t:String(x.t||host(x.u)),u:String(x.u),c:String(x.c||"")})});
 save();render();toast("Impor berhasil")}catch(err){toast("File tidak valid")}};r.readAsText(f);e.target.value=""};
 document.addEventListener("keydown",function(e){if(e.key==="Escape")close_()});
+
+// --- SISTEM CLOUD SYNC (GITHUB GIST) ---
+var VERCEL_BROKER_URL = "https://awn-broker.vercel.app/api/token";
+var GITHUB_CLIENT_ID = "MASUKKAN_CLIENT_ID_ANDA_DISINI"; // <--- GANTI DENGAN CLIENT ID ANDA
+var GIST_ID = localStorage.getItem('awn-gist-id') || null; 
+var accessToken = localStorage.getItem('awn-gh-token') || null;
+
+var urlParams = new URLSearchParams(window.location.search);
+var code = urlParams.get('code');
+
+var loginBtn = $("btn-login");
+var statusTxt = document.createElement("span");
+statusTxt.style.cssText = "font-size: 12px; color: var(--c1); margin-right: 10px; font-weight: bold; display: none;";
+loginBtn.parentNode.insertBefore(statusTxt, loginBtn);
+loginBtn.style.display = "inline-block"; 
+
+async function exchangeToken(code) {
+    try {
+        statusTxt.textContent = "Menghubungkan...";
+        statusTxt.style.display = "inline-block";
+        var res = await fetch(VERCEL_BROKER_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code: code })
+        });
+        var data = await res.json();
+        if (data.access_token) {
+            accessToken = data.access_token;
+            localStorage.setItem('awn-gh-token', accessToken);
+            window.history.replaceState({}, document.title, window.location.pathname);
+            await syncFromCloud(); 
+        } else {
+            alert("Gagal login: " + (data.error || "Unknown error"));
+        }
+    } catch (e) {
+        alert("Error koneksi ke server broker.");
+    }
+    updateLoginUI();
+}
+
+function updateLoginUI() {
+    if (accessToken) {
+        loginBtn.textContent = "Tersinkron ☁️";
+        loginBtn.style.background = "linear-gradient(120deg,#1a7f37,#2ea043)";
+        statusTxt.style.display = "none";
+        loginBtn.onclick = () => { 
+            if(confirm("Logout dari GitHub?")) {
+                localStorage.removeItem('awn-gh-token');
+                accessToken = null;
+                updateLoginUI();
+            }
+        };
+    } else {
+        loginBtn.textContent = "Login GitHub";
+        loginBtn.style.background = "linear-gradient(120deg,#333,#555)";
+        loginBtn.onclick = () => {
+            window.location.href = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&scope=gist`;
+        };
+    }
+}
+
+async function syncToCloud() {
+    if (!accessToken) return;
+    try {
+        var headers = { 'Authorization': `token ${accessToken}`, 'Accept': 'application/vnd.github.v3+json' };
+        var body = {
+            description: "AWN-STUDIO Link Backup",
+            public: false,
+            files: { "awn-links.json": { content: JSON.stringify(links) } }
+        };
+        
+        if (GIST_ID) {
+            await fetch(`https://api.github.com/gists/${GIST_ID}`, {
+                method: 'PATCH', headers: headers, body: JSON.stringify(body)
+            });
+        } else {
+            var res = await fetch('https://api.github.com/gists', {
+                method: 'POST', headers: headers, body: JSON.stringify(body)
+            });
+            var data = await res.json();
+            GIST_ID = data.id;
+            localStorage.setItem('awn-gist-id', GIST_ID);
+        }
+        statusTxt.textContent = "Tersimpan di Cloud ✅";
+        statusTxt.style.display = "inline-block";
+        setTimeout(() => statusTxt.style.display = "none", 2000);
+    } catch (e) { console.error("Gagal sinkron", e); }
+}
+
+async function syncFromCloud() {
+    if (!accessToken) return;
+    try {
+        statusTxt.textContent = "Mengambil data cloud...";
+        statusTxt.style.display = "inline-block";
+        var headers = { 'Authorization': `token ${accessToken}`, 'Accept': 'application/vnd.github.v3+json' };
+        
+        if (GIST_ID) {
+            var res = await fetch(`https://api.github.com/gists/${GIST_ID}`, { headers: headers });
+            if (res.ok) {
+                var data = await res.json();
+                var cloudLinks = JSON.parse(data.files["awn-links.json"].content);
+                if (Array.isArray(cloudLinks)) {
+                    links = cloudLinks;
+                    save(); 
+                    render(); 
+                    toast("Data disinkronkan dari Cloud!");
+                }
+            }
+        } else {
+            var res = await fetch('https://api.github.com/gists', { headers: headers });
+            var gists = await res.json();
+            var found = gists.find(g => g.description === "AWN-STUDIO Link Backup");
+            if (found) {
+                GIST_ID = found.id;
+                localStorage.setItem('awn-gist-id', GIST_ID);
+                await syncFromCloud(); 
+            } else {
+                await syncToCloud(); 
+            }
+        }
+    } catch (e) { console.error("Gagal ambil dari cloud", e); }
+    statusTxt.style.display = "none";
+}
+
+if (code) {
+    exchangeToken(code);
+} else {
+    updateLoginUI();
+    if (accessToken) syncFromCloud(); 
+}
+
+var oldSave = save;
+save = function() {
+    oldSave(); 
+    if (accessToken) {
+        clearTimeout(window.syncDebounce);
+        window.syncDebounce = setTimeout(syncToCloud, 1500); 
+    }
+};
+// ---------------------------------------
 
 /* Qi particles + sword light */
 var cv=$("cv"),cx=cv.getContext("2d"),W,H,P=[],S=[],reduce=matchMedia("(prefers-reduced-motion:reduce)").matches;
